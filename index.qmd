@@ -137,7 +137,6 @@ emissions_long_subset = emissions_long_1990_2022[
 
 # Create line chart. Year should be on the x-axis, emissions on the y-axis, and color should be by country.
 fig_chart = px.line(emissions_long_subset, x = "year", y = "emissions", color = "country", labels = {"emissions": "Emissions (CO2)"}, title = "Selected Countries CO2 Emissions (1990-2022)")
-fig_chart
 ```
 
 # Mapping Section
@@ -166,8 +165,6 @@ fig_map = px.choropleth(
     labels = {"emissions": "Emissions (CO2)"},
     title="Global CO2 Emissions (1990-2022)",
 )
-
-fig_map.show()
 ```
 
 
