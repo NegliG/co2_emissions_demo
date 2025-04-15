@@ -1,0 +1,445 @@
+---
+title: "Final Project: Child Mortality, Gross Domestic Product (GDP) per Capita, and Population Size"
+author: Negli Gallardo
+format: dashboard
+theme: superhero
+---
+
+```{python}
+import pandas as pd
+import numpy as np
+import plotly.express as px
+from itables import show
+import country_converter as coco
+```
+
+```{python}
+# Load the child mortality data
+child_mortality_raw = pd.read_csv("data/child_mortality.csv")
+# Load the GDP per capita data
+gdp_pcap_raw = pd.read_csv("data/gdp_pcap.csv")
+# Load the population size data
+population_raw = pd.read_csv("data/pop.csv")
+```
+
+```{python}
+# Clean the child mortality data
+def clean_k(gdp_pcap_raw, start_year, end_year):
+    for year in range(start_year, end_year + 1):
+        col = str(year)
+        if col in gdp_pcap_raw.columns:
+            has_k = gdp_pcap_raw[col].astype(str).str.contains("k", na = False)
+            values = gdp_pcap_raw[col].astype(str).str.replace("k", "", regex = False)
+            gdp_pcap_raw[col] = np.where(has_k, values.astype(float) * 1000, values.astype(float))
+    return gdp_pcap_raw
+
+gdp_pcap_raw = clean_k(gdp_pcap_raw, 1990, 2024)
+```
+
+```{python}
+# Clean the population size data
+def clean_B_M_k(dataframe, start_year, end_year):
+    """
+    Cleans columns in a DataFrame by removing 'M' and 'k' and converting the values to numeric.
+    'M' values are multiplied by 1,000,000, and 'k' values are multiplied by 1,000.
+    """
+    for year in range(start_year, end_year + 1):
+        col = str(year)
+        if col in dataframe.columns:
+            # Convert column to string and handle missing values
+            dataframe[col] = dataframe[col].astype(str).fillna("")
+            
+            # Check for "M" and "k" in the column
+            has_B = dataframe[col].str.contains("B", na = False)
+            has_M = dataframe[col].str.contains("M", na = False)
+            has_k = dataframe[col].str.contains("k", na = False)
+            
+            # Remove "M" and "k" and convert to float
+            values = dataframe[col].str.replace("B", "", regex = False)
+            values = values.str.replace("M", "", regex = False)
+            values = values.str.replace("k", "", regex = False)
+            
+            # Apply the conversion
+            dataframe[col] = np.where(
+                has_B, values.astype(float) * 1000000000,
+                np.where(has_M, values.astype(float) * 1000000,
+                        np.where(has_k, values.astype(float) * 1000, values.astype(float)))
+            )
+    return dataframe
+
+population_raw = clean_B_M_k(population_raw, 1990, 2024)
+```
+
+```{python}
+# Creating tables
+## Child Mortality
+# Subset the data to include `country`, `1990`, and `2024` columns only.
+table_child_mort = child_mortality_raw[["country", "1990", "2024"]]
+
+# Calculate absolute change as the difference between 2024 and 1990
+table_child_mort["Absolute Change"] = (
+    table_child_mort["2024"] - table_child_mort["1990"]
+)
+
+# Calculate relative change as the absolute change divided by the 1990 child mortality rate, then multiplied by 100
+table_child_mort["Relative Change"] = (
+    (table_child_mort["Absolute Change"] / table_child_mort["1990"]) * 100
+)
+
+# Round to 0 decimal places, and add a % sign to the relative change
+table_child_mort["Relative Change"] = table_child_mort["Relative Change"].round(0).astype(str) + "%"
+
+## GDP per Capita
+# Subset the data to include `country`, `1990`, and `2024` columns only.
+table_gdp = gdp_pcap_raw[["country", "1990", "2024"]]
+
+# Calculate absolute change as the difference between 2024 and 1990
+table_gdp["Absolute Change"] = (
+    table_gdp["2024"] - table_gdp["1990"]
+)
+
+# Calculate relative change as the absolute change divided by the 1990 gdp per capita, then multiplied by 100
+table_gdp["Relative Change"] = (
+    (table_gdp["Absolute Change"] / table_gdp["1990"]) * 100
+)
+
+# Round to 0 decimal places, and add a % sign to the relative change
+table_gdp["Relative Change"] = table_gdp["Relative Change"].round(0).astype(str) + "%"
+
+## Population Size
+# Subset the data to include `country`, `1990`, and `2024` columns only.
+table_population = population_raw[["country", "1990", "2024"]]
+
+# Calculate absolute change as the difference between 2024 and 1990
+table_population["Absolute Change"] = (
+    table_population["2024"] - table_population["1990"]
+)
+
+# Calculate relative change as the absolute change divided by the 1990 population, then multiplied by 100
+table_population["Relative Change"] = (
+    (table_population["Absolute Change"] / table_population["1990"]) * 100
+)
+
+# Round to 0 decimal places, and add a % sign to the relative change
+table_population["Relative Change"] = table_population["Relative Change"].round(0).astype(str) + "%"
+```
+
+```{python}
+# Creating Charts
+## Child Mortality
+# Here I melt the original `child_mortality_raw` dataset. Id_vars should be "country", your var_name should be "year" and value_name should be "mortality".
+child_mortality_long = pd.melt(child_mortality_raw, id_vars = ['country'], var_name = 'year', value_name = 'mortality')
+
+# I convert year to numeric using pd.to_numeric
+child_mortality_long["year"] = pd.to_numeric(child_mortality_long["year"])
+
+# I convert mortality to numeric using pd.to_numeric, also convert dashes to the minus sign
+child_mortality_long["mortality"] = pd.to_numeric(child_mortality_long["mortality"].astype(str).str.replace("−", "-", regex = False), errors = "coerce")
+
+# Here I run a query for years between 1990 and 2024
+child_mortality_long_1990_2024 = child_mortality_long[(child_mortality_long["year"] > 1989) & (child_mortality_long["year"] < 2025)]
+
+# Query for the 8 countries of interest
+child_mortality_long_subset = child_mortality_long_1990_2024[
+    (child_mortality_long_1990_2024['country'] == "Guatemala") | (child_mortality_long_1990_2024['country'] == "El Salvador") | (child_mortality_long_1990_2024['country'] == "Honduras") |
+    (child_mortality_long_1990_2024['country'] == "Costa Rica") |
+    (child_mortality_long_1990_2024['country'] == "Nicaragua") |
+    (child_mortality_long_1990_2024['country'] == "Panama") |
+    (child_mortality_long_1990_2024['country'] == "Belize") |
+    (child_mortality_long_1990_2024['country'] == "Dominican Republic")]
+
+# I create line chart. Year are on the x-axis, mortality on the y-axis, and the lines are colored by country.
+fig_chart_mc = px.line(child_mortality_long_subset, x = "year", y = "mortality", color = "country", labels = {"mortality": "Child Mortality Rate"}, title = "Selected Countries Child Mortality Rate (1990-2024)")
+
+## GDP per Capita
+# Here I melt the original `gdp_pcap_raw` dataset. Id_vars should be "country", your var_name should be "year" and value_name should be "gdp_pcap".
+gdp_long = pd.melt(gdp_pcap_raw, id_vars = ['country'], var_name = 'year', value_name = 'gdp_pcap')
+
+# I convert year to numeric using pd.to_numeric
+gdp_long["year"] = pd.to_numeric(gdp_long["year"])
+
+# I convert mortality to numeric using pd.to_numeric, also convert dashes to the minus sign
+gdp_long["gdp_pcap"] = pd.to_numeric(gdp_long["gdp_pcap"].astype(str).str.replace("−", "-", regex = False), errors = "coerce")
+
+# Here I run a query for years between 1990 and 2024
+gdp_long_1990_2024 = gdp_long[(gdp_long["year"] > 1989) & (gdp_long["year"] < 2025)]
+
+# Query for the 8 countries of interest
+gdp_long_subset = gdp_long_1990_2024[
+    (gdp_long_1990_2024['country'] == "Guatemala") | (gdp_long_1990_2024['country'] == "El Salvador") | (gdp_long_1990_2024['country'] == "Honduras") |
+    (gdp_long_1990_2024['country'] == "Costa Rica") |
+    (gdp_long_1990_2024['country'] == "Nicaragua") |
+    (gdp_long_1990_2024['country'] == "Panama") |
+    (gdp_long_1990_2024['country'] == "Belize") |
+    (gdp_long_1990_2024['country'] == "Dominican Republic")]
+
+# I create line chart. Year are on the x-axis, gdp_pcap on the y-axis, and the lines are colored by country.
+fig_chart_gdp = px.line(gdp_long_subset, x = "year", y = "gdp_pcap", color = "country", labels = {"gdp_pcap": "GDP per Capita (thousands of US dollars per year)"}, title = "Selected Countries GDP per Capita (1990-2024)")
+
+## Population Size
+# Here I melt the original `population_raw` dataset. Id_vars should be "country", your var_name should be "year" and value_name should be "population".
+population_long = pd.melt(population_raw, id_vars = ['country'], var_name = 'year', value_name = 'population')
+
+# I convert year to numeric using pd.to_numeric
+population_long["year"] = pd.to_numeric(population_long["year"])
+
+# I convert mortality to numeric using pd.to_numeric, also convert dashes to the minus sign
+population_long["population"] = pd.to_numeric(population_long["population"].astype(str).str.replace("−", "-", regex = False), errors = "coerce")
+
+# Here I run a query for years between 1990 and 2024
+population_long_1990_2024 = population_long[(population_long["year"] > 1989) & (population_long["year"] < 2025)]
+
+# Query for the 8 countries of interest
+population_long_subset = population_long_1990_2024[
+    (population_long_1990_2024['country'] == "Guatemala") | (population_long_1990_2024['country'] == "El Salvador") | (population_long_1990_2024['country'] == "Honduras") |
+    (population_long_1990_2024['country'] == "Costa Rica") |
+    (population_long_1990_2024['country'] == "Nicaragua") |
+    (population_long_1990_2024['country'] == "Panama") |
+    (population_long_1990_2024['country'] == "Belize") |
+    (population_long_1990_2024['country'] == "Dominican Republic")]
+
+# I create line chart. Year are on the x-axis, gdp_pcap on the y-axis, and the lines are colored by country.
+fig_chart_population = px.line(population_long_subset, x = "year", y = "population", color = "country", labels = {"population": "Population (in millions)"}, title = "Selected Countries Population (1990-2024)")
+```
+
+```{python}
+# Creating Maps
+## Child Mortality
+# Convert country names to ISO3 codes
+child_mortality_long_1990_2024["country_code"] = coco.convert(
+    child_mortality_long_1990_2024["country"], to = "ISO3"
+)
+# Creating Map
+fig_map_mc = px.choropleth(
+    child_mortality_long_1990_2024,
+    locations = "country_code",
+    color = "mortality",
+    hover_name = "country",
+    animation_frame = "year",
+    labels = {"mortality": "Mortality Rate"},
+    title = "Global Mortality Rate (1990-2024)",
+)
+
+## GDP per Capita
+# Convert country names to ISO3 codes
+gdp_long_1990_2024["country_code"] = coco.convert(
+    gdp_long_1990_2024["country"], to = "ISO3"
+)
+# Creating map
+fig_map_gdp = px.choropleth(
+    gdp_long_1990_2024,
+    locations = "country_code",
+    color = "gdp_pcap",
+    hover_name = "country",
+    animation_frame = "year",
+    labels = {"gdp_pcap": "GDP per Capita"},
+    title = "Global GDP per Capita (1990-2024)",
+)
+
+## Population Size
+# Convert country names to ISO3 codes
+population_long_1990_2024["country_code"] = coco.convert(
+    population_long_1990_2024["country"], to = "ISO3"
+)
+# Creating map
+fig_map_population = px.choropleth(
+    population_long_1990_2024,
+    locations = "country_code",
+    color = "population",
+    hover_name = "country",
+    animation_frame = "year",
+    labels = {"population": "Population"},
+    title = "Global Population (1990-2024)",
+)
+```
+
+```{python}
+# Creating Scatter Plots
+# Jointing child mortality and gdp per capita datasets
+cm_gdp_combined = pd.merge(child_mortality_long_subset, gdp_long_subset, on = ['country', 'year'], how = 'outer')
+# Merge population data with HIV data
+cm_gdp_combined_population = pd.merge(cm_gdp_combined, population_long_subset, on = ['country', 'year'], how =
+'inner')
+# Subsetting for yearr 1990
+cm_gdp_combined_population_1990 = cm_gdp_combined_population[(cm_gdp_combined_population["year"] == 1990)]
+# Creating Scatter plot
+scatt_cm_gdp_pop_1990 = px.scatter (cm_gdp_combined_population_1990,
+x = "gdp_pcap",
+y = "mortality",
+size = "population",
+color = "country",
+labels = {"gdp_pcap" : "GDP per Capita (USD per year)",
+                     "mortality" : "Child Mortality Rate"},
+                     title = "Relationship between GDP per Capita and Child Mortality Rate (selected countries, 1990)"
+)
+
+# Subsetting for year 2002
+cm_gdp_combined_population_2002 = cm_gdp_combined_population[(cm_gdp_combined_population["year"] == 2002)]
+# Creating Scatter plot
+scatt_cm_gdp_pop_2002 = px.scatter (cm_gdp_combined_population_2002,
+x = "gdp_pcap",
+y = "mortality",
+size = "population",
+color = "country",
+labels = {"gdp_pcap" : "GDP per Capita (USD per year)",
+                     "mortality" : "Child Mortality Rate"},
+                     title = "Relationship between GDP per Capita and Child Mortality Rate (selected countries, 2002)"
+)
+
+# Subsetting for year 2024
+cm_gdp_combined_population_2024 = cm_gdp_combined_population[(cm_gdp_combined_population["year"] == 2024)]
+# Creating Scatter plot
+scatt_cm_gdp_pop_2024 = px.scatter (cm_gdp_combined_population_2024,
+x = "gdp_pcap",
+y = "mortality",
+size = "population",
+color = "country",
+labels = {"gdp_pcap" : "GDP per Capita (USD per year)",
+                     "mortality" : "Child Mortality Rate"},
+                     title = "Relationship between GDP per Capita and Child Mortality Rate (selected countries, 2024)"
+)
+```
+
+```{python}
+# Extract highest, lowest, and global average for child mortality
+highest_mortality = table_child_mort.loc[table_child_mort["2024"].idxmax()]
+lowest_mortality = table_child_mort.loc[table_child_mort["2024"].idxmin()]
+average_mortality = table_child_mort["2024"].mean()
+
+# Extract highest, lowest, and global average for GDP per capita
+highest_gdp = table_gdp.loc[table_gdp["2024"].idxmax()]
+lowest_gdp = table_gdp.loc[table_gdp["2024"].idxmin()]
+average_gdp = table_gdp["2024"].mean()
+
+# Extract highest, lowest, and global average for population size
+highest_population = table_population.loc[table_population["2024"].idxmax()]
+lowest_population = table_population.loc[table_population["2024"].idxmin()]
+average_population = table_population["2024"].mean()
+```
+
+# Value Boxes
+::: {.grid}
+
+### Row 1
+
+::: {.col width="50%"}
+::: {.valuebox title="Highest Mortality Rate" color="primary"}
+`{python} f"""Country: {highest_mortality['country']};Year 1990 Value: {highest_mortality['1990']};Year 2024 Value: {highest_mortality['2024']};Relative Change: {highest_mortality['Relative Change']}"""`
+:::
+:::
+
+::: {.col width="50%"}
+::: {.valuebox title="Lowest Mortality Rate" color="secondary"}
+`{python} f"""Country: {lowest_mortality['country']};Year 1990 Value: {lowest_mortality['1990']};Year 2024 Value: {lowest_mortality['2024']};Relative Change: {lowest_mortality['Relative Change']}"""`
+:::
+:::
+
+### Row 2 {height = "30%"}
+
+::: {.col width="50%"}
+::: {.valuebox title="Highest GDP per Capita" color="success"}
+`{python} f"""Country: {highest_gdp['country']};Year 1990 Value: {highest_gdp['1990']};Year 2024 Value: {highest_gdp['2024']};Relative Change: {highest_gdp['Relative Change']}"""`
+:::
+:::
+
+::: {.col width="50%"}
+::: {.valuebox title="Lowest GDP per Capita" color="danger"}
+`{python} f"""Country: {lowest_gdp['country']};Year 1990 Value: {lowest_gdp['1990']};Year 2024 Value: {lowest_gdp['2024']};Relative Change: {lowest_gdp['Relative Change']}"""`
+:::
+:::
+
+### Row 3 {height = "30%"}
+
+::: {.col width="50%"}
+::: {.valuebox title="Highest Population Size" color="info"}
+`{python} f"""Country: {highest_population['country']};Year 1990 Value: {highest_population['1990']};Year 2024 Value: {highest_population['2024']};Relative Change: {highest_population['Relative Change']}"""`
+:::
+:::
+
+::: {.col width="50%"}
+::: {.valuebox title="Highest Population Size" color="light"}
+`{python} f"""Country: {lowest_population['country']};Year 1990 Value: {lowest_population['1990']};Year 2024 Value: {lowest_population['2024']};Relative Change: {lowest_population['Relative Change']}"""`
+:::
+:::
+
+:::
+
+# Layouts
+
+::: {.panel-tabset}
+
+## Table
+
+```{python}
+show(table_child_mort, caption = "Child Mortality Table (1990-2024)")
+```
+
+```{python}
+show(table_gdp, caption = "GDP per Capita Table (1990-2024)")
+```
+
+```{python}
+show(table_population, caption = "Population Size Table (1990-2024)")
+```
+
+## Chart
+
+```{python}
+fig_chart_mc.show()
+```
+
+```{python}
+fig_chart_gdp.show()
+```
+
+```{python}
+fig_chart_population.show()
+```
+
+## Map
+
+```{python}
+fig_map_mc.show()
+```
+
+```{python}
+fig_map_gdp.show()
+```
+
+```{python}
+fig_map_population.show()
+```
+
+## Scatter plot
+
+```{python}
+scatt_cm_gdp_pop_1990.show()
+```
+
+```{python}
+scatt_cm_gdp_pop_2002.show()
+```
+
+```{python}
+scatt_cm_gdp_pop_2024.show()
+```
+
+:::
+
+# About
+
+This dashboard presents an interactive exploration of global and regional trends in child mortality, GDP per capita, and population size, with a special focus on Central America and the Dominican Republic. The analysis draws on data from 1990, 2002, and 2024 to visualize changes over time and examine the relationship between economic conditions and child health outcomes.
+
+The dashboard includes:
+
+- **Data Tables**: For each country, a summary table shows child mortality rates in 1990 and 2024, the absolute change, and the relative change. This allows users to quickly assess progress over time.
+  
+- **Bar Charts**: Comparative bar charts display child mortality and GDP per capita for 1990 and 2024, highlighting regional trends in Central America and the Dominican Republic.
+
+- **Global Maps**: Thematic maps provide a worldwide perspective on the distribution of child mortality, GDP per capita, and population size in 1990 and 2024.
+
+- **Scatter Plots**: Visualizations for the years 1990, 2002, and 2024 reveal the relationship between child mortality and GDP per capita across countries in Central America and the Dominican Republic, offering insights into how economic development correlates with improvements in child health.
+
+Overall, this project demonstrates how data visualization tools in Python can be used to effectively communicate important global health and economic trends. It provides an accessible and engaging way to explore complex data and supports evidence-based understanding of development progress in the region.
+
+All the data frames were obtained form GAPMINDER (https://www.gapminder.org/data/)
